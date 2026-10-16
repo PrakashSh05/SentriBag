@@ -1,0 +1,723 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SentriBAG Dashboard</title>
+
+    <style>
+        :root {
+            --primary: #e94f37;
+            --background: #f6f7eb;
+            --text: #393e41;
+            --success: #10b981;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --border: #e5e7eb;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            padding: 24px;
+            font-family: Arial, sans-serif;
+            background: var(--background);
+            color: var(--text);
+        }
+
+        main {
+            max-width: 760px;
+            margin: 0 auto;
+        }
+
+        header { margin-bottom: 24px; }
+
+        h1 {
+            margin-bottom: 6px;
+            color: var(--primary);
+        }
+
+        .subtitle { color: #666; }
+
+        .card {
+            background: white;
+            padding: 20px;
+            margin-bottom: 18px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+        }
+
+        .status {
+            font-weight: bold;
+            color: var(--warning);
+        }
+
+        .status.armed { color: var(--success); }
+        .status.alarm { color: var(--danger); }
+        .status.disarmed { color: var(--warning); }
+
+        .buttons {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        button {
+            padding: 13px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .primary-button {
+            background: var(--primary);
+            color: white;
+        }
+
+        .arm {
+            background: var(--success);
+            color: white;
+        }
+
+        .disarm {
+            background: var(--primary);
+            color: white;
+        }
+
+        .cancel {
+            background: var(--danger);
+            color: white;
+        }
+
+        button:disabled {
+            opacity: 0.55;
+            cursor: not-allowed;
+        }
+
+        input {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        .message {
+            overflow-wrap: anywhere;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .hidden { display: none; }
+
+        .event {
+            padding: 14px 0;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .event:last-child { border-bottom: none; }
+
+        .event-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .event-meta {
+            font-size: 12px;
+            color: #666;
+            line-height: 1.6;
+            overflow-wrap: anywhere;
+        }
+
+        .event-badge {
+            display: inline-block;
+            font-size: 11px;
+            font-weight: bold;
+            padding: 4px 7px;
+            border-radius: 5px;
+            margin-bottom: 6px;
+            background: #f3f4f6;
+        }
+
+        .event-badge.alarm {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
+
+        .event-badge.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .event-badge.remote {
+            background: #dbeafe;
+            color: #1d4ed8;
+        }
+
+        .section-heading {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .small-button {
+            font-size: 12px;
+            padding: 8px 10px;
+            background: #f3f4f6;
+            color: var(--text);
+        }
+        
+/* Recent Events: fixed-height panel with independent scrolling */
+#eventHistory {
+    max-height: 320px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+    padding-right: 8px;
+}
+
+#eventHistory .event {
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+#eventHistory .event:last-child {
+    border-bottom: none;
+}
+
+/* Keep the Recent Events heading and Refresh button visible */
+.section-heading {
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 1;
+}
+
+/* A little more room on desktop */
+@media (min-width: 768px) {
+    #eventHistory {
+        max-height: 360px;
+    }
+}
+
+
+        @media (max-width: 480px) {
+            body { padding: 14px; }
+            .card { padding: 16px; }
+        }
+    </style>
+</head>
+
+<body>
+<main>
+    <header>
+        <h1>SentriBAG</h1>
+        <p class="subtitle">Smart Anti-Theft Protection System</p>
+    </header>
+
+    <!-- Authentication -->
+    <section class="card" id="authCard">
+        <h2>Dashboard Login</h2>
+        <p>Sign in using your Firebase dashboard account.</p>
+
+        <form id="loginForm">
+            <input
+                type="email"
+                id="email"
+                placeholder="Email address"
+                autocomplete="username"
+                required
+            />
+
+            <input
+                type="password"
+                id="password"
+                placeholder="Password"
+                autocomplete="current-password"
+                required
+            />
+
+            <button type="submit" class="primary-button">Sign In</button>
+        </form>
+
+        <p id="authMessage" class="message" aria-live="polite"></p>
+    </section>
+
+    <!-- System status -->
+    <section class="card">
+        <h2>System Status</h2>
+
+        <p>
+            Protection:
+            <span class="status" id="protectionStatus">Not connected</span>
+        </p>
+
+        <p>
+            Device connection:
+            <span id="deviceConnection">Not checked</span>
+        </p>
+
+        <p>
+            Last update:
+            <span id="lastUpdate">--</span>
+        </p>
+    </section>
+
+    <!-- Remote controls -->
+    <section class="card">
+        <h2>Remote Controls</h2>
+
+        <div class="buttons">
+            <button class="arm" id="armButton" disabled>ARM</button>
+            <button class="disarm" id="disarmButton" disabled>DISARM</button>
+            <button class="cancel" id="cancelButton" disabled>
+                CANCEL ALARM
+            </button>
+        </div>
+
+        <p id="commandMessage" class="message" role="status">
+            Sign in to enable remote controls.
+        </p>
+    </section>
+
+    <!-- Live event history -->
+    <section class="card">
+        <div class="section-heading">
+            <h2>Recent Events</h2>
+            <button id="refreshEventsButton" class="small-button" disabled>
+                Refresh
+            </button>
+        </div>
+
+        <p id="eventMessage" class="message" aria-live="polite">
+            Sign in to view event history.
+        </p>
+
+        <div id="eventHistory" aria-live="polite"></div>
+    </section>
+
+    <!-- Account -->
+    <section class="card hidden" id="accountCard">
+        <h2>Account</h2>
+        <p id="signedInUser"></p>
+        <button id="signOutButton" class="primary-button">Sign Out</button>
+    </section>
+</main>
+
+<script type="module">
+    import { initializeApp }
+        from "https://www.gstatic.com/firebasejs/12.4.0/firebase-app.js";
+
+    import {
+        getAuth,
+        signInWithEmailAndPassword,
+        onAuthStateChanged,
+        signOut
+    } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-auth.js";
+
+    import {
+        getDatabase,
+        ref,
+        get,
+        set,
+        onValue,
+        query,
+        limitToLast
+    } from "https://www.gstatic.com/firebasejs/12.4.0/firebase-database.js";
+
+    // Keep your existing Firebase Web App configuration.
+    // These are public client configuration values, not passwords.
+    
+const firebaseConfig = {
+            apiKey: "AIzaSyDebpqU9wHYrhc3Cxsx1HpZVddwDgrsEkY",
+            authDomain: "sentribag.firebaseapp.com",
+            databaseURL:
+                "https://sentribag-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "sentribag",
+            appId: "1:627057492764:web:1a1d0d6232e86773c8f0d9",
+        };
+
+    const authCard = document.getElementById("authCard");
+    const authMessage = document.getElementById("authMessage");
+    const loginForm = document.getElementById("loginForm");
+    const accountCard = document.getElementById("accountCard");
+    const signedInUser = document.getElementById("signedInUser");
+
+    const protectionStatus = document.getElementById("protectionStatus");
+    const deviceConnection = document.getElementById("deviceConnection");
+    const lastUpdate = document.getElementById("lastUpdate");
+    const commandMessage = document.getElementById("commandMessage");
+
+    const eventMessage = document.getElementById("eventMessage");
+    const eventHistory = document.getElementById("eventHistory");
+    const refreshEventsButton =
+        document.getElementById("refreshEventsButton");
+
+    const armButton = document.getElementById("armButton");
+    const disarmButton = document.getElementById("disarmButton");
+    const cancelButton = document.getElementById("cancelButton");
+
+    let stopDeviceListener = null;
+    let stopEventsListener = null;
+    let commandInProgress = false;
+    let dashboardReady = false;
+
+    function setAuthMessage(message, isError = false) {
+        authMessage.textContent = message;
+        authMessage.style.color = isError ? "#EF4444" : "#10B981";
+    }
+
+    function setCommandMessage(message, isError = false) {
+        commandMessage.textContent = message;
+        commandMessage.style.color = isError ? "#EF4444" : "#393E41";
+    }
+
+    function setControlsEnabled(enabled) {
+        const disabled = !enabled || commandInProgress;
+
+        armButton.disabled = disabled;
+        disarmButton.disabled = disabled;
+        cancelButton.disabled = disabled;
+    }
+
+    function formatDate(timestamp) {
+        const value = Number(timestamp);
+
+        if (!Number.isFinite(value) || value <= 0) {
+            return "Time unavailable";
+        }
+
+        const date = new Date(value);
+
+        if (Number.isNaN(date.getTime())) {
+            return "Time unavailable";
+        }
+
+        return date.toLocaleString();
+    }
+
+    function clearEventHistory(message) {
+        eventHistory.replaceChildren();
+        eventMessage.textContent = message;
+    }
+
+    function renderEvents(events) {
+        eventHistory.replaceChildren();
+
+        const entries = Object.entries(events || {})
+            .map(([key, value]) => ({
+                key,
+                ...(value && typeof value === "object" ? value : {})
+            }))
+            .sort((a, b) => {
+                const timeA = Number(a.timestamp) || 0;
+                const timeB = Number(b.timestamp) || 0;
+
+                if (timeA !== timeB) return timeB - timeA;
+
+                // Fallback for events whose timestamp is missing.
+                return b.key.localeCompare(a.key);
+            })
+            .slice(0, 20);
+
+        if (entries.length === 0) {
+            eventMessage.textContent = "No events recorded yet.";
+            return;
+        }
+
+        eventMessage.textContent =
+            "Showing the latest " + entries.length + " event(s).";
+
+        for (const event of entries) {
+            const article = document.createElement("article");
+            article.className = "event";
+
+            const type = String(event.type || "EVENT").replaceAll("_", " ");
+            const source = String(event.source || "UNKNOWN");
+            const message = String(event.message || "No event description");
+            const state = String(event.state || "Unknown");
+
+            const badge = document.createElement("span");
+            badge.className = "event-badge";
+
+            if (type.includes("ALARM")) {
+                badge.classList.add("alarm");
+            } else if (
+                type.includes("ARMED") ||
+                type.includes("CONNECTED")
+            ) {
+                badge.classList.add("success");
+            } else if (source === "REMOTE") {
+                badge.classList.add("remote");
+            }
+
+            badge.textContent = type;
+
+            const title = document.createElement("div");
+            title.className = "event-title";
+            title.textContent = message;
+
+            const meta = document.createElement("div");
+            meta.className = "event-meta";
+
+            const time = document.createElement("div");
+            time.textContent = "Time: " + formatDate(event.timestamp);
+
+            const sourceLine = document.createElement("div");
+            sourceLine.textContent = "Source: " + source;
+
+            const stateLine = document.createElement("div");
+            stateLine.textContent = "State: " + state;
+
+            meta.append(time, sourceLine, stateLine);
+            article.append(badge, title, meta);
+            eventHistory.appendChild(article);
+        }
+    }
+
+    try {
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const database = getDatabase(app);
+
+        const deviceRef = ref(database, "devices/sentribag01");
+        const commandRef = ref(database, "commandRequests/sentribag01");
+
+        const eventsRef = query(
+            ref(database, "events/sentribag01"),
+            limitToLast(50)
+        );
+
+        function stopListeners() {
+            if (stopDeviceListener) {
+                stopDeviceListener();
+                stopDeviceListener = null;
+            }
+
+            if (stopEventsListener) {
+                stopEventsListener();
+                stopEventsListener = null;
+            }
+        }
+
+        function startDeviceListener() {
+            if (stopDeviceListener) stopDeviceListener();
+
+            stopDeviceListener = onValue(
+                deviceRef,
+                snapshot => {
+                    const device = snapshot.val();
+
+                    if (!device) {
+                        protectionStatus.textContent = "Device record missing";
+                        deviceConnection.textContent = "Unknown";
+                        lastUpdate.textContent = "--";
+                        protectionStatus.className = "status";
+                        return;
+                    }
+
+                    const status = String(device.status || "Unknown");
+
+                    protectionStatus.textContent = status;
+                    protectionStatus.className = "status";
+
+                    if (status === "ARMED") {
+                        protectionStatus.classList.add("armed");
+                    } else if (status === "ALARM") {
+                        protectionStatus.classList.add("alarm");
+                    } else if (status === "DISARMED") {
+                        protectionStatus.classList.add("disarmed");
+                    }
+
+                    deviceConnection.textContent =
+                        device.online === true ? "Online" : "Offline";
+
+                    lastUpdate.textContent =
+                        device.lastSeen != null
+                            ? formatDate(device.lastSeen)
+                            : "No update received yet";
+                },
+                error => {
+                    console.error("Device listener error:", error.code);
+                    protectionStatus.textContent = "Unable to load";
+                    deviceConnection.textContent = "Access error";
+                }
+            );
+        }
+
+        function startEventsListener() {
+            if (stopEventsListener) stopEventsListener();
+
+            clearEventHistory("Loading event history...");
+
+            stopEventsListener = onValue(
+                eventsRef,
+                snapshot => {
+                    renderEvents(snapshot.val());
+                },
+                error => {
+                    console.error("Events listener error:", error.code);
+                    clearEventHistory(
+                        "Unable to load events. Check Firebase database rules."
+                    );
+                }
+            );
+        }
+
+        async function sendCommand(command) {
+            if (!auth.currentUser) {
+                setCommandMessage("Please sign in first.", true);
+                return;
+            }
+
+            if (commandInProgress) return;
+
+            commandInProgress = true;
+            setControlsEnabled(true);
+            setCommandMessage("Sending " + command + " command...");
+
+            try {
+                const snapshot = await get(deviceRef);
+                const device = snapshot.val();
+
+                if (!device || device.online !== true) {
+                    throw new Error(
+                        "The device is not reporting online. Check the ESP32 connection."
+                    );
+                }
+
+                const now = Date.now();
+
+                const request = {
+                    command,
+                    commandId: crypto.randomUUID(),
+                    createdAt: now,
+                    expiresAt: now + 15000
+                };
+
+                await set(commandRef, request);
+
+                setCommandMessage(
+                    command + " request queued. Waiting for ESP32 acknowledgement."
+                );
+
+                console.log("Command request written:", command);
+            } catch (error) {
+                console.error("Command request failed:", error);
+
+                setCommandMessage(
+                    error.message || "Unable to send the command.",
+                    true
+                );
+            } finally {
+                commandInProgress = false;
+                setControlsEnabled(Boolean(auth.currentUser) && dashboardReady);
+            }
+        }
+
+        armButton.addEventListener("click", () => sendCommand("ARM"));
+        disarmButton.addEventListener("click", () => sendCommand("DISARM"));
+        cancelButton.addEventListener(
+            "click",
+            () => sendCommand("CANCEL_ALARM")
+        );
+
+        refreshEventsButton.addEventListener("click", () => {
+            if (auth.currentUser) startEventsListener();
+        });
+
+        loginForm.addEventListener("submit", async event => {
+            event.preventDefault();
+
+            const email = document.getElementById("email").value.trim();
+            const password = document.getElementById("password").value;
+
+            setAuthMessage("Signing in...");
+
+            try {
+                await signInWithEmailAndPassword(auth, email, password);
+                loginForm.reset();
+                setAuthMessage("Sign-in successful.");
+            } catch (error) {
+                console.error("Authentication error:", error.code);
+
+                setAuthMessage(
+                    "Sign-in failed. Check your credentials and Firebase settings.",
+                    true
+                );
+            }
+        });
+
+        onAuthStateChanged(auth, user => {
+            dashboardReady = Boolean(user);
+
+            if (user) {
+                authCard.classList.add("hidden");
+                accountCard.classList.remove("hidden");
+
+                signedInUser.textContent = "Signed in as " + (user.email || "");
+
+                setControlsEnabled(true);
+                refreshEventsButton.disabled = false;
+
+                setCommandMessage(
+                    "Signed in. Remote commands are available."
+                );
+
+                startDeviceListener();
+                startEventsListener();
+
+                console.log("Dashboard user authenticated.");
+            } else {
+                stopListeners();
+
+                authCard.classList.remove("hidden");
+                accountCard.classList.add("hidden");
+
+                signedInUser.textContent = "";
+
+                setControlsEnabled(false);
+                refreshEventsButton.disabled = true;
+
+                setCommandMessage("Sign in to enable remote controls.");
+
+                protectionStatus.textContent = "Not connected";
+                protectionStatus.className = "status";
+                deviceConnection.textContent = "Not checked";
+                lastUpdate.textContent = "--";
+
+                clearEventHistory("Sign in to view event history.");
+            }
+        });
+
+        document.getElementById("signOutButton")
+            .addEventListener("click", async () => {
+                try {
+                    await signOut(auth);
+                    setAuthMessage("Signed out successfully.");
+                } catch (error) {
+                    console.error("Sign-out error:", error.code);
+                    setAuthMessage("Sign-out failed.", true);
+                }
+            });
+
+        console.log("Firebase initialized.");
+    } catch (error) {
+        console.error("Firebase initialization error:", error);
+        setAuthMessage(
+            "Firebase initialization failed. Check your configuration values.",
+            true
+        );
+    }
+</script>
+</body>
+</html>
